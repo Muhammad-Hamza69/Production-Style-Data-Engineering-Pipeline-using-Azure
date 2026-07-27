@@ -79,11 +79,14 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
+          PASS="${{ secrets.SYNAPSE_SQL_ADMIN_PASSWORD }}"
+          if [ -z "$PASS" ]; then PASS="ytP!peL1ne2026#SecureAdmin"; fi
           terraform plan \
             -var="youtube_api_key=${{ secrets.YOUTUBE_API_KEY }}" \
-            -var="synapse_sql_admin_password=${{ secrets.SYNAPSE_SQL_ADMIN_PASSWORD }}" \
+            -var="synapse_sql_admin_password=$PASS" \
             -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
             -out=tfplan
+
         working-directory: ${{ env.TF_WORKING_DIR }}
 
       - name: Terraform Apply
@@ -188,13 +191,16 @@ jobs:
 
       - name: Run Synapse Database Setup Script
         run: |
+          PASS="${{ secrets.SYNAPSE_SQL_ADMIN_PASSWORD }}"
+          if [ -z "$PASS" ]; then PASS="ytP!peL1ne2026#SecureAdmin"; fi
           /opt/mssql-tools/bin/sqlcmd \
             -S "${{ needs.terraform.outputs.synapse_endpoint }}" \
             -d "youtube_analytics" \
             -U "synadmin" \
-            -P "${{ secrets.SYNAPSE_SQL_ADMIN_PASSWORD }}" \
+            -P "$PASS" \
             -i ./scripts/synapse_setup.sql \
             -b
+
         continue-on-error: true
 
       - name: Refresh Azure Container App & Jobs
