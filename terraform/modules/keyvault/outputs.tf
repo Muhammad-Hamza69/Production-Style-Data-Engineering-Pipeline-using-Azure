@@ -14,6 +14,11 @@ output "dashboard_trigger_api_key_secret_name" {
   value = azurerm_key_vault_secret.dashboard_trigger_api_key.name
 }
 
+output "key_vault_name" {
+  value = azurerm_key_vault.this.name
+}
+
 output "synapse_sql_admin_password_secret_name" {
   value = azurerm_key_vault_secret.synapse_sql_admin_password.name
 }
+

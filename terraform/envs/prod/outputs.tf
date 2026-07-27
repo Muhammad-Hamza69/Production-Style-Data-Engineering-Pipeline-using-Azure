@@ -40,3 +40,8 @@ output "resource_group_name" {
   value = var.resource_group_name
 }
 
+output "key_vault_name" {
+  value = module.keyvault.key_vault_name
+}
+
+

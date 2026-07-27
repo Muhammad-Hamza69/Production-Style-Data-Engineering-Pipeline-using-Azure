@@ -14,7 +14,9 @@ locals {
   # cycle; a same-string computed independently on both sides isn't.
   logic_app_workflow_id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${var.resource_group_name}/providers/Microsoft.Logic/workflows/${var.project_name}-orchestration"
   logic_app_trigger_url = "https://management.azure.com${local.logic_app_workflow_id}/triggers/Hourly/run?api-version=2019-05-01"
+  synapse_password      = random_password.synapse_admin_password.result
 }
+
 
 module "loganalytics" {
   source              = "../../modules/loganalytics"
@@ -46,12 +48,18 @@ module "keyvault" {
   deployer_object_id         = data.azurerm_client_config.current.object_id
   youtube_api_key            = var.youtube_api_key
   dashboard_trigger_api_key  = random_password.dashboard_trigger_api_key.result
-  synapse_sql_admin_password = var.synapse_sql_admin_password
+  synapse_sql_admin_password = local.synapse_password
 }
 
 resource "random_password" "dashboard_trigger_api_key" {
   length  = 32
   special = false
+}
+
+resource "random_password" "synapse_admin_password" {
+  length           = 24
+  special          = true
+  override_special = "!@#$"
 }
 
 module "identity" {
@@ -70,7 +78,7 @@ module "synapse" {
   synapse_storage_account_name = "ytplsynfs${local.suffix}"
   resource_group_name          = var.resource_group_name
   location                     = var.location
-  sql_admin_password           = var.synapse_sql_admin_password
+  sql_admin_password           = local.synapse_password
   dbt_principal_id             = module.identity.dbt_principal_id
   dashboard_principal_id       = module.identity.dashboard_principal_id
   deployer_ip_address          = var.deployer_ip_address
@@ -89,10 +97,11 @@ module "containerapps" {
   youtube_regions            = var.youtube_regions
   synapse_sql_endpoint       = module.synapse.sql_endpoint
   synapse_sql_admin_login    = "synadmin"
-  synapse_sql_admin_password = var.synapse_sql_admin_password
-  azure_tenant_id            = data.azurerm_client_config.current.tenant_id
-  dbt_sp_client_id           = module.identity.dbt_sp_client_id
-  dbt_sp_client_secret       = module.identity.dbt_sp_client_secret
+  synapse_sql_admin_password = local.synapse_password
+
+  azure_tenant_id      = data.azurerm_client_config.current.tenant_id
+  dbt_sp_client_id     = module.identity.dbt_sp_client_id
+  dbt_sp_client_secret = module.identity.dbt_sp_client_secret
 
   ingest_identity_id        = module.identity.ingest_identity_id
   ingest_client_id          = module.identity.ingest_client_id
