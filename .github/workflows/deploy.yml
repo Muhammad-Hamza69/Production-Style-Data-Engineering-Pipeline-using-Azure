@@ -230,3 +230,11 @@ jobs:
             --name yt-pipeline-dashboard \
             --resource-group ${{ needs.terraform.outputs.resource_group }} \
             --image ${{ needs.terraform.outputs.acr_login_server }}/yt-dashboard:${{ github.sha }} || true
+
+      - name: Trigger Initial Data Pipeline Execution
+        run: |
+          echo "Triggering initial YouTube Data Ingestion Job post-deploy..."
+          az containerapp job start \
+            --name yt-pipeline-ingest \
+            --resource-group ${{ needs.terraform.outputs.resource_group }}
+
