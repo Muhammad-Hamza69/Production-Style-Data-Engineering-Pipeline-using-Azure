@@ -125,7 +125,7 @@
                     "runAfter": {},
                     "inputs": {
                       "method": "POST",
-                      "uri": "https://httpbin.org/post",
+                      "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
                       "body": {
                         "to": "${alert_email}",
                         "subject": "[YT Pipeline] SUCCESS - Pipeline Run Completed",
@@ -141,7 +141,7 @@
                       "runAfter": {},
                       "inputs": {
                         "method": "POST",
-                        "uri": "https://httpbin.org/post",
+                        "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
                         "body": {
                           "to": "${alert_email}",
                           "subject": "[YT Pipeline] FAILURE -- dbt build failed",
@@ -160,7 +160,7 @@
                   "runAfter": {},
                   "inputs": {
                     "method": "POST",
-                    "uri": "https://httpbin.org/post",
+                    "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
                     "body": {
                       "to": "${alert_email}",
                       "subject": "[YT Pipeline] FAILURE -- raw-transform failed",
@@ -179,7 +179,7 @@
               "runAfter": {},
               "inputs": {
                 "method": "POST",
-                "uri": "https://httpbin.org/post",
+                "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
                 "body": {
                   "to": "${alert_email}",
                   "subject": "[YT Pipeline] FAILURE -- ingest failed",
@@ -194,6 +194,7 @@
     "outputs": {}
   }
 }
+
 
 
 
