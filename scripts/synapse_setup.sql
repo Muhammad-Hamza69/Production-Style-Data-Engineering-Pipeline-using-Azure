@@ -124,12 +124,23 @@ CREATE EXTERNAL TABLE enriched.channel_analytics (
 WITH (LOCATION = 'channel_analytics/', DATA_SOURCE = yt_pipeline_enriched_lake, FILE_FORMAT = DeltaFormat);
 GO
 
--- Grant the dashboard's identity read access (it already has "Synapse
--- User" via Azure RBAC, terraform/modules/synapse -- this is the
--- SQL-level GRANT that RBAC role alone doesn't imply).
-CREATE USER [yt-pipeline-dashboard-identity] FROM EXTERNAL PROVIDER;
+-- Grant the dashboard's identity read access
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'yt-pipeline-dashboard-identity')
+BEGIN
+    CREATE USER [yt-pipeline-dashboard-identity] FROM EXTERNAL PROVIDER;
+END
 GO
 GRANT SELECT ON SCHEMA::enriched TO [yt-pipeline-dashboard-identity];
+GO
 
--- The dbt job's identity ("Synapse SQL Administrator" via RBAC) already
--- has full access -- no additional SQL-level grant needed for it.
+-- Grant dbt Service Principal access
+IF NOT EXISTS (SELECT * FROM sys.database_principals WHERE name = 'yt-pipeline-dbt-sp')
+BEGIN
+    CREATE USER [yt-pipeline-dbt-sp] FROM EXTERNAL PROVIDER;
+END
+GO
+GRANT SELECT ON SCHEMA::raw TO [yt-pipeline-dbt-sp];
+GRANT SELECT ON SCHEMA::curated TO [yt-pipeline-dbt-sp];
+GRANT SELECT ON SCHEMA::enriched TO [yt-pipeline-dbt-sp];
+GO
+

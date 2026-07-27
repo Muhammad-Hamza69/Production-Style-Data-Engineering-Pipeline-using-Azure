@@ -198,11 +198,12 @@ jobs:
           PASS=$(az keyvault secret show --vault-name "${{ needs.terraform.outputs.key_vault_name }}" --name "synapse-sql-admin-password" --query "value" -o tsv)
           /opt/mssql-tools/bin/sqlcmd \
             -S "${{ needs.terraform.outputs.synapse_endpoint }}" \
-            -d "youtube_analytics" \
+            -d "master" \
             -U "synadmin" \
             -P "$PASS" \
             -i ./scripts/synapse_setup.sql \
             -b
+
 
 
         continue-on-error: true
