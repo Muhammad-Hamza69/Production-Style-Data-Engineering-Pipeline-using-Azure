@@ -37,6 +37,8 @@
 
 ## 🏗 Architecture Overview
 
+![alt text](Azure-Architecture.drawio.png)
+
 ### What This Architecture Does
 
 ```
