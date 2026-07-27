@@ -87,9 +87,62 @@ resource "azurerm_resource_group_template_deployment" "workflow_definition" {
   })
 
 
-
-
-
-
   depends_on = [azurerm_logic_app_workflow.this]
 }
+
+
+
+
+
+
+
+
+resource "azurerm_logic_app_workflow" "notifier" {
+  name                = "${var.project_name}-notifier"
+  resource_group_name = var.resource_group_name
+  location            = var.location
+
+  workflow_parameters = {
+    "$connections" = jsonencode({
+      type         = "Object"
+      defaultValue = {}
+    })
+  }
+}
+
+resource "azurerm_resource_group_template_deployment" "notifier_definition" {
+  count               = var.notifier_definition_json != "" ? 1 : 0
+  name                = "${var.project_name}-notif-${substr(md5(var.notifier_definition_json), 0, 8)}"
+  resource_group_name = var.resource_group_name
+  deployment_mode     = "Incremental"
+
+  template_content = jsonencode({
+    "$schema"      = "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#"
+    contentVersion = "1.0.0.0"
+    resources = [
+      {
+        type       = "Microsoft.Logic/workflows"
+        apiVersion = "2019-05-01"
+        name       = azurerm_logic_app_workflow.notifier.name
+        location   = var.location
+        properties = {
+          definition = jsondecode(var.notifier_definition_json)["definition"]
+          parameters = {
+            "$connections" = {
+              value = {
+                gmail = {
+                  connectionId   = azurerm_api_connection.gmail.id
+                  connectionName = azurerm_api_connection.gmail.name
+                  id             = data.azurerm_managed_api.gmail.id
+                }
+              }
+            }
+          }
+        }
+      }
+    ]
+  })
+
+  depends_on = [azurerm_logic_app_workflow.notifier, azurerm_api_connection.gmail]
+}
+

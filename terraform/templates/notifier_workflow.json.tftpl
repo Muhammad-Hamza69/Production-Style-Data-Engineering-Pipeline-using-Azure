@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": {
+      "type": "Object",
+      "defaultValue": {}
+    }
+  },
+  "triggers": {
+    "manual": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "to": { "type": "string" },
+            "subject": { "type": "string" },
+            "body": { "type": "string" }
+          }
+        }
+      }
+    }
+  },
+  "actions": {
+    "Send_Gmail_Email": {
+      "type": "ApiConnection",
+      "inputs": {
+        "method": "post",
+        "path": "/v2/Mail",
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['gmail']['connectionId']"
+          }
+        },
+        "body": {
+          "To": "@triggerBody()?['to']",
+          "Subject": "@triggerBody()?['subject']",
+          "Body": "@triggerBody()?['body']"
+        }
+      }
+    }
+  },
+  "outputs": {}
+}

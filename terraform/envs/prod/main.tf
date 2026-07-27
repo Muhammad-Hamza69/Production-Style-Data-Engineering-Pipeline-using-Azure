@@ -165,4 +165,6 @@ module "logicapp" {
     dbt_job_id           = module.containerapps.dbt_job_id
     alert_email          = var.alert_email
   })
+  notifier_definition_json = templatefile("${path.module}/../../templates/notifier_workflow.json.tftpl", {})
 }
+

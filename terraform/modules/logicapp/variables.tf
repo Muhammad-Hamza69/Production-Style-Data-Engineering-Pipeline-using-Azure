@@ -6,3 +6,9 @@ variable "workflow_definition_json" {
   description = "Rendered contents of pipeline_workflow.json.tftpl"
   type        = string
 }
+variable "notifier_definition_json" {
+  description = "Rendered contents of notifier_workflow.json.tftpl"
+  type        = string
+  default     = ""
+}
+
