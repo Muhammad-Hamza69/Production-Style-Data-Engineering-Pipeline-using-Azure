@@ -63,11 +63,10 @@ jobs:
         run: |
           az group create --name "HAMZA-RESOURCE-GROUP" --location "centralus"
           az storage account create --name "hamzatfstate72143" --resource-group "HAMZA-RESOURCE-GROUP" --location "centralus" --sku Standard_LRS --allow-blob-public-access false || true
-          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
-          az role assignment create --assignee "$SP_APP_ID" --role "Storage Blob Data Contributor" --scope "/subscriptions/${{ env.ARM_SUBSCRIPTION_ID }}" || true
           az storage container create --name "tfstate" --account-name "hamzatfstate72143" --auth-mode login || true
 
       - name: Terraform Init
+
 
 
         run: terraform init
