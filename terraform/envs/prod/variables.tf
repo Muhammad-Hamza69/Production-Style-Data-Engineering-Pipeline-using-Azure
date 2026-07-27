@@ -26,8 +26,9 @@ variable "alert_email" {
 }
 
 variable "deployer_ip_address" {
-  description = "Public IP of whoever runs terraform apply, for Synapse's role-assignment firewall. Get it from the error message of a failed apply, or ipify.org."
+  description = "Public IP of whoever runs terraform apply, for Synapse's role-assignment firewall."
   type        = string
+  default     = "0.0.0.0"
 }
 
 variable "synapse_sql_admin_password" {
@@ -37,20 +38,25 @@ variable "synapse_sql_admin_password" {
 }
 
 variable "ingest_image_tag" {
-  type = string
+  type    = string
+  default = "latest"
 }
 
 variable "raw_transform_image_tag" {
-  type = string
+  type    = string
+  default = "latest"
 }
 
 variable "dbt_image_tag" {
-  type = string
+  type    = string
+  default = "latest"
 }
 
 variable "dashboard_image_tag" {
-  type = string
+  type    = string
+  default = "latest"
 }
+
 
 variable "youtube_regions" {
   type    = string
