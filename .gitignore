@@ -1,8 +1,8 @@
 # Terraform
-terraform
 **/.terraform/
 *.tfstate
 *.tfstate.*
 crash.log
 *.tfvars
 *.tfvars.json
+tfplan*

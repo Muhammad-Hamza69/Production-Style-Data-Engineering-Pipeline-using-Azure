@@ -1,0 +1,200 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$connections": { "type": "Object", "defaultValue": {} }
+    },
+    "triggers": {
+      "Hourly": {
+        "type": "Recurrence",
+        "recurrence": { "frequency": "Hour", "interval": 1 }
+      }
+    },
+    "actions": {
+      "Start_Ingest_Job": {
+        "type": "Http",
+        "runAfter": {},
+        "inputs": {
+          "method": "POST",
+          "uri": "https://management.azure.com${ingest_job_id}/start?api-version=2024-03-01",
+          "authentication": { "type": "ManagedServiceIdentity", "identity": "/subscriptions/387f2fde-0bc5-431f-8968-df9944b55fe2/resourceGroups/HAMZA-RESOURCE-GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/yt-pipeline-logicapp-identity" }
+        }
+      },
+      "Poll_Ingest_Job": {
+        "type": "Until",
+        "runAfter": { "Start_Ingest_Job": ["Succeeded"] },
+        "expression": "@or(equals(body('Get_Ingest_Status')?['properties']?['status'], 'Succeeded'), equals(body('Get_Ingest_Status')?['properties']?['status'], 'Failed'))",
+        "limit": { "count": 40, "timeout": "PT10M" },
+        "actions": {
+          "Wait_Ingest": {
+            "type": "Wait",
+            "runAfter": {},
+            "inputs": { "interval": { "unit": "Second", "count": 15 } }
+          },
+          "Get_Ingest_Status": {
+            "type": "Http",
+            "runAfter": { "Wait_Ingest": ["Succeeded"] },
+            "inputs": {
+              "method": "GET",
+              "uri": "https://management.azure.com${ingest_job_id}/executions/@{body('Start_Ingest_Job')?['name']}?api-version=2024-03-01",
+              "authentication": { "type": "ManagedServiceIdentity", "identity": "/subscriptions/387f2fde-0bc5-431f-8968-df9944b55fe2/resourceGroups/HAMZA-RESOURCE-GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/yt-pipeline-logicapp-identity" }
+            }
+          }
+        }
+      },
+      "Check_Ingest_Result": {
+        "type": "If",
+        "runAfter": { "Poll_Ingest_Job": ["Succeeded"] },
+        "expression": { "equals": ["@body('Get_Ingest_Status')?['properties']?['status']", "Succeeded"] },
+        "actions": {
+          "Start_RawTransform_Job": {
+            "type": "Http",
+            "runAfter": {},
+            "inputs": {
+              "method": "POST",
+              "uri": "https://management.azure.com${raw_transform_job_id}/start?api-version=2024-03-01",
+              "authentication": { "type": "ManagedServiceIdentity", "identity": "/subscriptions/387f2fde-0bc5-431f-8968-df9944b55fe2/resourceGroups/HAMZA-RESOURCE-GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/yt-pipeline-logicapp-identity" }
+            }
+          },
+          "Poll_RawTransform_Job": {
+            "type": "Until",
+            "runAfter": { "Start_RawTransform_Job": ["Succeeded"] },
+            "expression": "@or(equals(body('Get_RawTransform_Status')?['properties']?['status'], 'Succeeded'), equals(body('Get_RawTransform_Status')?['properties']?['status'], 'Failed'))",
+            "limit": { "count": 60, "timeout": "PT20M" },
+            "actions": {
+              "Wait_RawTransform": {
+                "type": "Wait",
+                "runAfter": {},
+                "inputs": { "interval": { "unit": "Second", "count": 15 } }
+              },
+              "Get_RawTransform_Status": {
+                "type": "Http",
+                "runAfter": { "Wait_RawTransform": ["Succeeded"] },
+                "inputs": {
+                  "method": "GET",
+                  "uri": "https://management.azure.com${raw_transform_job_id}/executions/@{body('Start_RawTransform_Job')?['name']}?api-version=2024-03-01",
+                  "authentication": { "type": "ManagedServiceIdentity", "identity": "/subscriptions/387f2fde-0bc5-431f-8968-df9944b55fe2/resourceGroups/HAMZA-RESOURCE-GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/yt-pipeline-logicapp-identity" }
+                }
+              }
+            }
+          },
+          "Check_RawTransform_Result": {
+            "type": "If",
+            "runAfter": { "Poll_RawTransform_Job": ["Succeeded"] },
+            "expression": { "equals": ["@body('Get_RawTransform_Status')?['properties']?['status']", "Succeeded"] },
+            "actions": {
+              "Start_Dbt_Job": {
+                "type": "Http",
+                "runAfter": {},
+                "inputs": {
+                  "method": "POST",
+                  "uri": "https://management.azure.com${dbt_job_id}/start?api-version=2024-03-01",
+                  "authentication": { "type": "ManagedServiceIdentity", "identity": "/subscriptions/387f2fde-0bc5-431f-8968-df9944b55fe2/resourceGroups/HAMZA-RESOURCE-GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/yt-pipeline-logicapp-identity" }
+                }
+              },
+              "Poll_Dbt_Job": {
+                "type": "Until",
+                "runAfter": { "Start_Dbt_Job": ["Succeeded"] },
+                "expression": "@or(equals(body('Get_Dbt_Status')?['properties']?['status'], 'Succeeded'), equals(body('Get_Dbt_Status')?['properties']?['status'], 'Failed'))",
+                "limit": { "count": 60, "timeout": "PT20M" },
+                "actions": {
+                  "Wait_Dbt": {
+                    "type": "Wait",
+                    "runAfter": {},
+                    "inputs": { "interval": { "unit": "Second", "count": 15 } }
+                  },
+                  "Get_Dbt_Status": {
+                    "type": "Http",
+                    "runAfter": { "Wait_Dbt": ["Succeeded"] },
+                    "inputs": {
+                      "method": "GET",
+                      "uri": "https://management.azure.com${dbt_job_id}/executions/@{body('Start_Dbt_Job')?['name']}?api-version=2024-03-01",
+                      "authentication": { "type": "ManagedServiceIdentity", "identity": "/subscriptions/387f2fde-0bc5-431f-8968-df9944b55fe2/resourceGroups/HAMZA-RESOURCE-GROUP/providers/Microsoft.ManagedIdentity/userAssignedIdentities/yt-pipeline-logicapp-identity" }
+                    }
+                  }
+                }
+              },
+              "Check_Dbt_Result": {
+                "type": "If",
+                "runAfter": { "Poll_Dbt_Job": ["Succeeded"] },
+                "expression": { "equals": ["@body('Get_Dbt_Status')?['properties']?['status']", "Succeeded"] },
+                "actions": {
+                  "Notify_Success": {
+                    "type": "ApiConnection",
+                    "runAfter": {},
+                    "inputs": {
+                      "method": "post",
+                      "path": "/v2/Mail",
+                      "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                      "body": {
+                        "To": "${alert_email}",
+                        "Subject": "[YT Pipeline] SUCCESS",
+                        "Body": "Pipeline run completed successfully."
+                      }
+                    }
+                  }
+                },
+                "else": {
+                  "actions": {
+                    "Notify_Dbt_Failure": {
+                      "type": "ApiConnection",
+                      "runAfter": {},
+                      "inputs": {
+                        "method": "post",
+                        "path": "/v2/Mail",
+                        "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                        "body": {
+                          "To": "${alert_email}",
+                          "Subject": "[YT Pipeline] FAILURE -- dbt build failed",
+                          "Body": "@{string(body('Get_Dbt_Status'))}"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Notify_RawTransform_Failure": {
+                  "type": "ApiConnection",
+                  "runAfter": {},
+                  "inputs": {
+                    "method": "post",
+                    "path": "/v2/Mail",
+                    "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                    "body": {
+                      "To": "${alert_email}",
+                      "Subject": "[YT Pipeline] FAILURE -- raw-transform failed",
+                      "Body": "@{string(body('Get_RawTransform_Status'))}"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Notify_Ingest_Failure": {
+              "type": "ApiConnection",
+              "runAfter": {},
+              "inputs": {
+                "method": "post",
+                "path": "/v2/Mail",
+                "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                "body": {
+                  "To": "${alert_email}",
+                  "Subject": "[YT Pipeline] FAILURE -- ingest failed",
+                  "Body": "@{string(body('Get_Ingest_Status'))}"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "outputs": {}
+  }
+}
