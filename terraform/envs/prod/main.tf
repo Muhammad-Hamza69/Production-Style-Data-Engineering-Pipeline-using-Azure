@@ -125,11 +125,11 @@ module "containerapps" {
 # Contributor on the whole workflow (which would also let it edit the
 # workflow definition, not just run it).
 resource "azurerm_role_assignment" "dashboard_run_logic_app" {
-  scope                = local.logic_app_workflow_id
+  scope                = data.azurerm_resource_group.this.id
   role_definition_name = "Logic App Operator"
   principal_id         = module.identity.dashboard_principal_id
-  depends_on           = [module.logicapp]
 }
+
 
 # Logic App's identity needs Contributor on each Job it starts -- defined
 # here, not inside modules/identity, because it needs both that module's
