@@ -1,4 +1,5 @@
 variable "resource_group_name" {
+
   description = "Pre-existing resource group everything in this project lives under (created once, out of band, by the operator: az group create --name HAMZA-RESOURCE-GROUP)."
   type        = string
   default     = "HAMZA-RESOURCE-GROUP"
