@@ -61,7 +61,7 @@ jobs:
         run: terraform fmt -check -recursive
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Ensure Azure Backend State Storage Exists & Cleanup Stale State
+      - name: Ensure Azure Backend State Storage Exists
         run: |
           az group create --name "HAMZA-RESOURCE-GROUP" --location "southcentralus"
           az storage account create --name "hamzatfstate72143" --resource-group "HAMZA-RESOURCE-GROUP" --location "southcentralus" --sku Standard_LRS --allow-blob-public-access false || true
@@ -71,12 +71,6 @@ jobs:
           echo "Checking for soft-deleted Key Vaults to purge..."
           az keyvault purge --name "ytpl-kv-387f2fde" --location "southcentralus" 2>/dev/null || true
           az keyvault purge --name "ytpl-kv-387f2fde" --location "centralus" 2>/dev/null || true
-
-          # If state blob has stale references to deleted resources, delete stale state blob
-          if [ "${{ github.event.inputs.action }}" == "apply" ] || [ "${{ github.event_name }}" == "push" ]; then
-            echo "Clearing stale tfstate blob if resource group was recreated..."
-            az storage blob delete --account-name "hamzatfstate72143" --container-name "tfstate" --name "prod.terraform.tfstate" --auth-mode login 2>/dev/null || true
-          fi
 
       - name: Terraform Init
         run: terraform init
