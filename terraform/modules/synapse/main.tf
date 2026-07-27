@@ -81,11 +81,13 @@ resource "azurerm_synapse_firewall_rule" "allow_azure_services" {
 # the same apply. Whoever runs `terraform apply` locally needs their own
 # public IP allowlisted here.
 resource "azurerm_synapse_firewall_rule" "allow_deployer_ip" {
+  count                = var.deployer_ip_address != "0.0.0.0" ? 1 : 0
   name                 = "AllowDeployerIp"
   synapse_workspace_id = azurerm_synapse_workspace.this.id
   start_ip_address     = var.deployer_ip_address
   end_ip_address       = var.deployer_ip_address
 }
+
 
 # These are Synapse's OWN internal RBAC roles (granted via Synapse's own
 # permission API, exposed through azurerm_synapse_role_assignment) -- NOT

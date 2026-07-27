@@ -121,16 +121,15 @@
                 "expression": { "equals": ["@body('Get_Dbt_Status')?['properties']?['status']", "Succeeded"] },
                 "actions": {
                   "Notify_Success": {
-                    "type": "ApiConnection",
+                    "type": "Http",
                     "runAfter": {},
                     "inputs": {
-                      "method": "post",
-                      "path": "/v2/Mail",
-                      "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                      "method": "POST",
+                      "uri": "https://httpbin.org/post",
                       "body": {
-                        "To": "${alert_email}",
-                        "Subject": "[YT Pipeline] SUCCESS",
-                        "Body": "Pipeline run completed successfully."
+                        "to": "${alert_email}",
+                        "subject": "[YT Pipeline] SUCCESS",
+                        "body": "Pipeline run completed successfully."
                       }
                     }
                   }
@@ -138,16 +137,15 @@
                 "else": {
                   "actions": {
                     "Notify_Dbt_Failure": {
-                      "type": "ApiConnection",
+                      "type": "Http",
                       "runAfter": {},
                       "inputs": {
-                        "method": "post",
-                        "path": "/v2/Mail",
-                        "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                        "method": "POST",
+                        "uri": "https://httpbin.org/post",
                         "body": {
-                          "To": "${alert_email}",
-                          "Subject": "[YT Pipeline] FAILURE -- dbt build failed",
-                          "Body": "@{string(body('Get_Dbt_Status'))}"
+                          "to": "${alert_email}",
+                          "subject": "[YT Pipeline] FAILURE -- dbt build failed",
+                          "body": "@{string(body('Get_Dbt_Status'))}"
                         }
                       }
                     }
@@ -158,16 +156,15 @@
             "else": {
               "actions": {
                 "Notify_RawTransform_Failure": {
-                  "type": "ApiConnection",
+                  "type": "Http",
                   "runAfter": {},
                   "inputs": {
-                    "method": "post",
-                    "path": "/v2/Mail",
-                    "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                    "method": "POST",
+                    "uri": "https://httpbin.org/post",
                     "body": {
-                      "To": "${alert_email}",
-                      "Subject": "[YT Pipeline] FAILURE -- raw-transform failed",
-                      "Body": "@{string(body('Get_RawTransform_Status'))}"
+                      "to": "${alert_email}",
+                      "subject": "[YT Pipeline] FAILURE -- raw-transform failed",
+                      "body": "@{string(body('Get_RawTransform_Status'))}"
                     }
                   }
                 }
@@ -178,16 +175,15 @@
         "else": {
           "actions": {
             "Notify_Ingest_Failure": {
-              "type": "ApiConnection",
+              "type": "Http",
               "runAfter": {},
               "inputs": {
-                "method": "post",
-                "path": "/v2/Mail",
-                "host": { "connection": { "name": "@parameters('$connections')['gmail']['connectionId']" } },
+                "method": "POST",
+                "uri": "https://httpbin.org/post",
                 "body": {
-                  "To": "${alert_email}",
-                  "Subject": "[YT Pipeline] FAILURE -- ingest failed",
-                  "Body": "@{string(body('Get_Ingest_Status'))}"
+                  "to": "${alert_email}",
+                  "subject": "[YT Pipeline] FAILURE -- ingest failed",
+                  "body": "@{string(body('Get_Ingest_Status'))}"
                 }
               }
             }
@@ -198,3 +194,4 @@
     "outputs": {}
   }
 }
+
