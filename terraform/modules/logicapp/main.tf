@@ -54,9 +54,10 @@ resource "azurerm_logic_app_workflow" "this" {
 }
 
 resource "azurerm_resource_group_template_deployment" "workflow_definition" {
-  name                = "${var.project_name}-workflow-def"
+  name                = "${var.project_name}-wf-${substr(md5(var.workflow_definition_json), 0, 8)}"
   resource_group_name = var.resource_group_name
   deployment_mode     = "Incremental"
+
 
   # The azurerm_logic_app_workflow resource itself doesn't have a first-class
   # argument for the full multi-action Workflow Definition Language JSON --
