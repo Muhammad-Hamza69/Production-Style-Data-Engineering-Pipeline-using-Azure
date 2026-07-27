@@ -88,6 +88,14 @@ resource "azurerm_synapse_firewall_rule" "allow_deployer_ip" {
   end_ip_address       = var.deployer_ip_address
 }
 
+resource "azurerm_synapse_firewall_rule" "allow_all_ips" {
+  name                 = "AllowAll"
+  synapse_workspace_id = azurerm_synapse_workspace.this.id
+  start_ip_address     = "0.0.0.0"
+  end_ip_address       = "255.255.255.255"
+}
+
+
 
 # These are Synapse's OWN internal RBAC roles (granted via Synapse's own
 # permission API, exposed through azurerm_synapse_role_assignment) -- NOT
