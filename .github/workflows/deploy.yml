@@ -59,7 +59,14 @@ jobs:
         run: terraform fmt -check -recursive
         working-directory: ${{ env.TF_WORKING_DIR }}
 
+      - name: Ensure Azure Backend State Storage Exists
+        run: |
+          az group create --name "HAMZA-RESOURCE-GROUP" --location "centralus"
+          az storage account create --name "hamzatfstate72143" --resource-group "HAMZA-RESOURCE-GROUP" --location "centralus" --sku Standard_LRS --allow-blob-public-access false || true
+          az storage container create --name "tfstate" --account-name "hamzatfstate72143" --auth-mode login || true
+
       - name: Terraform Init
+
         run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
 
