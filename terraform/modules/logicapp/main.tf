@@ -81,10 +81,22 @@ resource "azurerm_resource_group_template_deployment" "workflow_definition" {
         location   = var.location
         properties = {
           definition = jsondecode(var.workflow_definition_json)["definition"]
+          parameters = {
+            "$connections" = {
+              value = {
+                gmail = {
+                  connectionId   = azurerm_api_connection.gmail.id
+                  connectionName = azurerm_api_connection.gmail.name
+                  id             = data.azurerm_managed_api.gmail.id
+                }
+              }
+            }
+          }
         }
       }
     ]
   })
+
 
 
   depends_on = [azurerm_logic_app_workflow.this]
