@@ -79,12 +79,19 @@ resource "azurerm_resource_group_template_deployment" "workflow_definition" {
         apiVersion = "2019-05-01"
         name       = azurerm_logic_app_workflow.this.name
         location   = var.location
+        identity = {
+          type = "UserAssigned"
+          userAssignedIdentities = {
+            (var.logicapp_identity_id) = {}
+          }
+        }
         properties = {
           definition = jsondecode(var.workflow_definition_json)["definition"]
         }
       }
     ]
   })
+
 
 
   depends_on = [azurerm_logic_app_workflow.this]
