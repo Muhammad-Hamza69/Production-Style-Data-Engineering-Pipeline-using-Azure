@@ -1,0 +1,38 @@
+name: 'yt_pipeline'
+version: '1.0.0'
+config-version: 2
+
+profile: 'yt_pipeline'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# IMPORTANT architectural note, read before touching this file:
+# There are NO dbt models in this project -- models/curated and
+# models/enriched are empty on purpose. Synapse serverless SQL pools are
+# READ-ONLY over the data lake (no MERGE/UPDATE/DELETE, and CETAS-based
+# external-table writes against a *serverless* pool specifically are not a
+# capability any dbt-synapse adapter version can be trusted to support
+# without a live test -- its primary use case is dedicated pools with real
+# physical tables). Rather than ship an unverified assumption, every
+# transform (curated_statistics MERGE, curated_reference_data dedup, all 3
+# enriched aggregations) is Python + deltalake (see
+# scripts/build_curated_and_enriched.py), the same reliable pattern
+# jobs/raw_transform already uses.
+#
+# dbt's role here is narrower than on the AWS side, but not nothing: every
+# one of those 5 tables is declared in models/sources.yml and tested with
+# the exact same generic tests (not_null, test_null_percentage,
+# dbt_expectations range/row-count checks) the AWS project ran as dbt
+# tests against real models. `dbt test` runs those checks against whatever
+# the Python script just wrote; `dbt source freshness` still works
+# unchanged. What's lost is dbt's model-contract enforcement (contracts
+# apply to models, not sources) -- the equivalent schema/dtype guarantee is
+# enforced in Python via explicit pandas dtype casts before each Delta
+# write, same mechanism jobs/raw_transform already uses for its own schema.
+models: {}

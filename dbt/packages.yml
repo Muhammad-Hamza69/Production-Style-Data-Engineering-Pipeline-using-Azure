@@ -1,0 +1,8 @@
+# dbt_expectations was removed -- its Synapse/T-SQL dialect dispatch macros
+# generated invalid SQL for expect_table_row_count_to_be_between and
+# expect_column_values_to_be_between (confirmed against a real test run:
+# "Incorrect syntax near '='"). Both checks are now hand-written generic
+# tests instead (tests/generic/test_row_count_between.sql,
+# test_value_range.sql), which are simple enough not to need a package at
+# all, and are guaranteed compatible since they're plain, verified T-SQL.
+packages: []

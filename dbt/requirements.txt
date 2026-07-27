@@ -1,0 +1,11 @@
+# Pin exact versions -- deltalake's merge API has had real behavior
+# differences across versions; this pin is a known-working combination to
+# be validated in the build's manual smoke test, not assumed (same
+# discipline the AWS project applied to dbt-athena-community's Iceberg
+# merge strategy).
+dbt-core==1.8.8
+dbt-synapse==1.8.0
+azure-identity==1.17.1
+deltalake==0.18.2
+pandas==2.2.2
+numpy==1.26.4

@@ -1,0 +1,89 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: "raw"
+    tables:
+      - name: raw_statistics
+        description: >
+          Immutable, append-only ingestion log written by the raw-transform
+          job -- one row per video per staging file processed, mixing live
+          YouTube API pulls and the one-time Kaggle historical seed.
+        loaded_at_field: "CAST(_ingestion_timestamp AS datetime2)"
+        freshness:
+          warn_after: { count: 24, period: hour }
+          error_after: { count: 48, period: hour }
+      - name: raw_reference_data
+        description: Category id -> name lookup, same append-only contract.
+
+  # Every table below is written by scripts/build_curated_and_enriched.py
+  # (Python + deltalake), not a dbt model -- see dbt_project.yml's header
+  # note for why. Declared as sources purely so `dbt test`/`dbt source
+  # freshness` can still validate them, preserving the AWS project's
+  # DQ-checks-as-dbt-tests design even though dbt isn't doing the writing.
+  - name: curated
+    schema: "curated"
+    tables:
+      - name: curated_statistics
+        description: One row per video/region/trending-day, cleaned, deduped, MERGEd incrementally.
+        tests:
+          - test_row_count_between:
+              min_value: 10
+        columns:
+          - name: video_id
+            tests: [not_null]
+          - name: title
+            tests:
+              - test_null_percentage:
+                  threshold: 5
+          - name: channel_title
+            tests:
+              - test_null_percentage:
+                  threshold: 5
+          - name: region
+            tests: [not_null]
+          - name: trending_date_parsed
+            tests: [not_null]
+          - name: views
+            tests:
+              - test_value_range:
+                  min_value: 0
+                  max_value: 50000000000
+
+      - name: curated_reference_data
+        description: Category id -> name lookup, deduped, latest wins.
+        columns:
+          - name: id
+            tests: [not_null]
+          - name: category_name
+          - name: region
+            tests: [not_null]
+
+  - name: enriched
+    schema: "enriched"
+    tables:
+      - name: trending_analytics
+        description: Daily trending stats per region -- consumed by the dashboard and Power BI.
+        columns:
+          - name: region
+            tests: [not_null]
+          - name: trending_date_parsed
+            tests: [not_null]
+
+      - name: channel_analytics
+        description: Per-channel-per-region rollup with a within-region view rank.
+        columns:
+          - name: channel_title
+            tests: [not_null]
+          - name: region
+            tests: [not_null]
+          - name: rank_in_region
+            tests: [not_null]
+
+      - name: category_analytics
+        description: Per-category-per-region-per-day rollup with view-share.
+        columns:
+          - name: region
+            tests: [not_null]
+          - name: category_name
+            tests: [not_null]

@@ -1,0 +1,4 @@
+azure-identity==1.17.1
+azure-storage-file-datalake==12.16.0
+pandas==2.2.2
+deltalake==0.18.2

@@ -1,0 +1,50 @@
+yt_pipeline:
+  target: prod
+  outputs:
+    prod:
+      type: synapse
+      driver: "ODBC Driver 18 for SQL Server"
+      server: "${SYNAPSE_SERVER}"
+      port: 1433
+      database: "yt_pipeline"
+      schema: "curated"
+      # Azure AD Service Principal auth -- the third auth mode tried here,
+      # and the one that actually works. History, in order:
+      #   1. Authentication=ActiveDirectoryMsi (the container's own
+      #      user-assigned Managed Identity): fails with "Login timeout
+      #      expired (SQLDriverConnect)". The ODBC driver's native MSI
+      #      resolution expects the classic Azure VM instance-metadata
+      #      endpoint (169.254.169.254); Container Apps exposes identity via
+      #      an App-Service-style local endpoint instead
+      #      (IDENTITY_ENDPOINT/IDENTITY_HEADER), which the driver's built-in
+      #      MSI code doesn't know how to reach, so it just hangs. (The
+      #      Python SDK's ManagedIdentityCredential DOES handle this
+      #      correctly -- that's why the dashboard's pyodbc connection,
+      #      which fetches a token via azure-identity and passes it
+      #      explicitly through SQL_COPT_SS_ACCESS_TOKEN, works fine. dbt-
+      #      synapse's profile schema has no "supply a pre-fetched token"
+      #      option, so that workaround isn't available here.)
+      #   2. SQL login (user/password against the synadmin account): fails
+      #      outright with "SQL Authentication is not supported by Microsoft
+      #      Fabric" -- confirmed dbt-synapse==1.8.0 internally reuses
+      #      dbt-fabric's connection manager (logs literally say "fabric
+      #      adapter: ..."), which hard-blocks SQL auth regardless of
+      #      profile config.
+      #   3. Service Principal (this one): a real AAD App Registration
+      #      (yt-pipeline-dbt-sp), not a Managed Identity, authenticating via
+      #      a plain OAuth client-credentials flow against
+      #      login.microsoftonline.com -- no instance-metadata service
+      #      involved at all, so the Container-Apps-vs-VM endpoint mismatch
+      #      from option 1 doesn't apply, and it isn't SQL auth so option 2's
+      #      block doesn't apply either. The one real tradeoff: this
+      #      reintroduces a stored secret (the SP's client secret, in Key
+      #      Vault) where every other component in this project uses a
+      #      Managed Identity -- a deliberate, narrow exception forced by a
+      #      genuine adapter limitation, not a design preference.
+      authentication: ActiveDirectoryServicePrincipal
+      tenant_id: "${AZURE_TENANT_ID}"
+      client_id: "${DBT_SP_CLIENT_ID}"
+      client_secret: "${DBT_SP_CLIENT_SECRET}"
+      encrypt: true
+      trust_cert: false
+      threads: 4

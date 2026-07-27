@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="60">
+  <title>YT Pipeline — Monitoring Dashboard</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, sans-serif; margin: 2rem; background: #0f1117; color: #e6e6e6; }
+    h1 { font-size: 1.4rem; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; color: #9aa4b2; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
+    th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #2a2e37; font-size: 0.9rem; }
+    th { color: #9aa4b2; font-weight: 600; }
+    .status-SUCCEEDED { color: #4caf50; }
+    .status-FAILED { color: #f44336; }
+    .status-RUNNING { color: #2196f3; }
+    .status-TIMED_OUT, .status-ABORTED, .status-CANCELLED { color: #ff9800; }
+    .pass { color: #4caf50; font-weight: 600; }
+    .fail { color: #f44336; font-weight: 600; }
+    .card { background: #171a21; border: 1px solid #2a2e37; border-radius: 8px; padding: 1rem 1.25rem; margin-top: 0.5rem; }
+    .stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .stat { flex: 1; min-width: 160px; }
+    .stat .value { font-size: 1.6rem; font-weight: 700; }
+    .stat .label { color: #9aa4b2; font-size: 0.85rem; }
+    button { background: #2563eb; color: #fff; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.9rem; cursor: pointer; }
+    button:disabled { background: #3a3f4b; cursor: not-allowed; }
+    #trigger-result, #query-result { margin-top: 0.75rem; font-size: 0.9rem; }
+    .query-buttons { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <h1>YouTube Pipeline — Control Dashboard (Azure)</h1>
+
+  <h2>Trigger a Pipeline Run</h2>
+  <div class="card">
+    {% set is_running = executions | selectattr('status', 'equalto', 'RUNNING') | list %}
+    <button id="trigger-btn" onclick="triggerRun()" {{ 'disabled' if is_running else '' }}>
+      {{ 'Run in progress…' if is_running else 'Trigger Pipeline Run' }}
+    </button>
+    <div id="trigger-result"></div>
+  </div>
+
+  <h2>Enriched Data Queries</h2>
+  <div class="card">
+    <div class="query-buttons">
+      {% for name in query_names %}
+      <button onclick="runQuery('{{ name }}')">{{ name.replace('_', ' ') }}</button>
+      {% endfor %}
+    </div>
+    <div id="query-result"></div>
+  </div>
+
+  <h2>dbt Test / Curated+Enriched Build (last run)</h2>
+  <div class="card">
+    {% if dq_result %}
+      <p>
+        Overall:
+        <span class="{{ 'pass' if dq_result.quality_passed else 'fail' }}">
+          {{ 'PASS' if dq_result.quality_passed else 'FAIL' }}
+        </span>
+        — Curated/Enriched build (Python+Delta) + dbt tests
+      </p>
+    {% else %}
+      <p>No dbt build result available yet.</p>
+    {% endif %}
+  </div>
+
+  <h2>Enriched Table Row Counts</h2>
+  <div class="card stats">
+    {% for table, count in gold_stats.items() %}
+      <div class="stat">
+        <div class="value">{{ count }}</div>
+        <div class="label">{{ table }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <h2>Recent Pipeline Runs (Logic App)</h2>
+  <table>
+    <thead>
+      <tr><th>Run</th><th>Status</th><th>Started</th><th>Stopped</th></tr>
+    </thead>
+    <tbody>
+      {% for e in executions %}
+      <tr>
+        <td>{{ e.name }}</td>
+        <td class="status-{{ e.status }}">{{ e.status }}</td>
+        <td>{{ e.startDate }}</td>
+        <td>{{ e.stopDate or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">No runs yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    async function triggerRun() {
+      const resultEl = document.getElementById('trigger-result');
+      resultEl.textContent = 'Triggering…';
+      try {
+        // No auth header needed: the browser automatically attaches the
+        // Basic Auth credentials it cached from loading this page.
+        const resp = await fetch('/trigger', { method: 'POST' });
+        const body = await resp.json();
+        resultEl.textContent = resp.ok
+          ? 'Triggered a new pipeline run.'
+          : `Error (${resp.status}): ${body.error}`;
+      } catch (e) {
+        resultEl.textContent = `Request failed: ${e}`;
+      }
+    }
+
+    async function runQuery(name) {
+      const resultEl = document.getElementById('query-result');
+      resultEl.textContent = 'Loading…';
+      try {
+        const resp = await fetch(`/query/${name}`);
+        const body = await resp.json();
+        if (!resp.ok) {
+          resultEl.textContent = `Error (${resp.status}): ${body.error}`;
+          return;
+        }
+        if (!body.rows.length) {
+          resultEl.textContent = 'No rows returned.';
+          return;
+        }
+        const cols = Object.keys(body.rows[0]);
+        let html = '<table><thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+        for (const row of body.rows) {
+          html += '<tr>' + cols.map(c => `<td>${row[c]}</td>`).join('') + '</tr>';
+        }
+        html += '</tbody></table>';
+        resultEl.innerHTML = html;
+      } catch (e) {
+        resultEl.textContent = `Request failed: ${e}`;
+      }
+    }
+  </script>
+</body>
+</html>

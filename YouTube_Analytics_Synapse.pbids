@@ -1,0 +1,18 @@
+{
+  "version": "0.1",
+  "connections": [
+    {
+      "details": {
+        "protocol": "tds",
+        "address": {
+          "server": "ytpl-synapse-387f2fde-ondemand.sql.azuresynapse.net",
+          "database": "yt_pipeline"
+        },
+        "authentication": null,
+        "query": null
+      },
+      "options": {},
+      "mode": null
+    }
+  ]
+}
