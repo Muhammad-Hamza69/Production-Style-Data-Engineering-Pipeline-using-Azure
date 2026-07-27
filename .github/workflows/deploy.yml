@@ -1,0 +1,204 @@
+name: Azure YouTube Data Pipeline CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to execute'
+        required: true
+        default: 'apply'
+        type: choice
+        options:
+          - apply
+          - plan
+          - destroy
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_WORKING_DIR: 'terraform/envs/prod'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  terraform:
+    name: '1. Provision Azure Infrastructure (Terraform)'
+    runs-on: ubuntu-latest
+    outputs:
+      acr_login_server: ${{ steps.tf_outputs.outputs.acr_login_server }}
+      resource_group: ${{ steps.tf_outputs.outputs.resource_group }}
+      synapse_endpoint: ${{ steps.tf_outputs.outputs.synapse_endpoint }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.0'
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan \
+            -var="youtube_api_key=${{ secrets.YOUTUBE_API_KEY }}" \
+            -var="synapse_sql_admin_password=${{ secrets.SYNAPSE_SQL_ADMIN_PASSWORD }}" \
+            -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
+            -out=tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Terraform Apply
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: terraform apply -auto-approve tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: Extract Terraform Outputs
+        id: tf_outputs
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+        run: |
+          ACR_SERVER=$(terraform output -raw acr_login_server 2>/dev/null || echo "")
+          RG_NAME=$(terraform output -raw resource_group_name 2>/dev/null || echo "rg-yt-pipeline-prod")
+          SYNAPSE_EP=$(terraform output -raw synapse_sql_endpoint 2>/dev/null || echo "")
+          echo "acr_login_server=$ACR_SERVER" >> $GITHUB_OUTPUT
+          echo "resource_group=$RG_NAME" >> $GITHUB_OUTPUT
+          echo "synapse_endpoint=$SYNAPSE_EP" >> $GITHUB_OUTPUT
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+  build-and-push-containers:
+    name: '2. Build & Push Microservice Docker Images'
+    needs: terraform
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Log in to Azure Container Registry
+        run: |
+          az acr login --name ${{ needs.terraform.outputs.acr_login_server }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & Push Ingest Container
+        uses: docker/build-push-action@v5
+        with:
+          context: ./jobs/ingest
+          file: ./jobs/ingest/Dockerfile
+          push: true
+          tags: |
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-ingest:latest
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-ingest:${{ github.sha }}
+
+      - name: Build & Push Raw Transform Container
+        uses: docker/build-push-action@v5
+        with:
+          context: ./jobs/raw_transform
+          file: ./jobs/raw_transform/Dockerfile
+          push: true
+          tags: |
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-raw-transform:latest
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-raw-transform:${{ github.sha }}
+
+      - name: Build & Push dbt Container
+        uses: docker/build-push-action@v5
+        with:
+          context: ./dbt
+          file: ./dbt/Dockerfile
+          push: true
+          tags: |
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-dbt:latest
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-dbt:${{ github.sha }}
+
+      - name: Build & Push Dashboard Container
+        uses: docker/build-push-action@v5
+        with:
+          context: ./dashboard
+          file: ./dashboard/Dockerfile
+          push: true
+          tags: |
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-dashboard:latest
+            ${{ needs.terraform.outputs.acr_login_server }}/yt-dashboard:${{ github.sha }}
+
+  deploy-and-initialize:
+    name: '3. Synapse Database Setup & Container Refresh'
+    needs: [terraform, build-and-push-containers]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install sqlcmd Utility
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list | sudo tee /etc/apt/sources.list.d/msprod.list
+          sudo apt-get update
+          ACCEPT_EULA=Y sudo apt-get install -y mssql-tools unixodbc-dev
+          echo 'export PATH="$PATH:/opt/mssql-tools/bin"' >> ~/.bashrc
+
+      - name: Run Synapse Database Setup Script
+        run: |
+          /opt/mssql-tools/bin/sqlcmd \
+            -S "${{ needs.terraform.outputs.synapse_endpoint }}" \
+            -d "youtube_analytics" \
+            -U "synadmin" \
+            -P "${{ secrets.SYNAPSE_SQL_ADMIN_PASSWORD }}" \
+            -i ./scripts/synapse_setup.sql \
+            -b
+        continue-on-error: true
+
+      - name: Refresh Azure Container App & Jobs
+        run: |
+          echo "Updating Container Apps and Jobs with latest container images..."
+          az containerapp job update \
+            --name yt-pipeline-ingest \
+            --resource-group ${{ needs.terraform.outputs.resource_group }} \
+            --image ${{ needs.terraform.outputs.acr_login_server }}/yt-ingest:${{ github.sha }} || true
+
+          az containerapp job update \
+            --name yt-pipeline-raw-transform \
+            --resource-group ${{ needs.terraform.outputs.resource_group }} \
+            --image ${{ needs.terraform.outputs.acr_login_server }}/yt-raw-transform:${{ github.sha }} || true
+
+          az containerapp job update \
+            --name yt-pipeline-dbt \
+            --resource-group ${{ needs.terraform.outputs.resource_group }} \
+            --image ${{ needs.terraform.outputs.acr_login_server }}/yt-dbt:${{ github.sha }} || true
+
+          az containerapp update \
+            --name yt-pipeline-dashboard \
+            --resource-group ${{ needs.terraform.outputs.resource_group }} \
+            --image ${{ needs.terraform.outputs.acr_login_server }}/yt-dashboard:${{ github.sha }} || true
