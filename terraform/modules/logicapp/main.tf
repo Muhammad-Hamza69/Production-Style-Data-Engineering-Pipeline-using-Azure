@@ -126,8 +126,9 @@ resource "azurerm_resource_group_template_deployment" "notifier_definition" {
         name       = azurerm_logic_app_workflow.notifier.name
         location   = var.location
         properties = {
-          definition = jsondecode(var.notifier_definition_json)["definition"]
+          definition = jsondecode(var.notifier_definition_json)
           parameters = {
+
             "$connections" = {
               value = {
                 gmail = {
