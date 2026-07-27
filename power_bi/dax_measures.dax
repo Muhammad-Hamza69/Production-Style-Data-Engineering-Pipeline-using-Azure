@@ -1,0 +1,86 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// YouTube Data Pipeline — Power BI DAX Measures & KPI Catalog
+// Data Source: Azure Synapse Serverless SQL Pool (yt_pipeline database)
+// Schema: enriched (trending_analytics, category_analytics, channel_analytics)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── 1. EXECUTIVE KPI SUMMARY MEASURES ────────────────────────────────────────
+
+Total Trending Views = 
+    SUM(trending_analytics[total_views])
+
+Total Likes = 
+    SUM(trending_analytics[total_likes])
+
+Total Comments = 
+    SUM(trending_analytics[total_comments])
+
+Total Videos Tracked = 
+    SUM(trending_analytics[total_videos])
+
+Average Engagement Rate = 
+    AVERAGE(trending_analytics[avg_engagement_rate])
+
+Average Like Ratio = 
+    AVERAGE(trending_analytics[avg_like_ratio])
+
+Total Active Channels = 
+    DISTINCTCOUNT(channel_analytics[channel_title])
+
+Total Active Categories = 
+    DISTINCTCOUNT(category_analytics[category_name])
+
+Total Regions Analyzed = 
+    DISTINCTCOUNT(trending_analytics[region])
+
+
+// ── 2. CATEGORY & CHANNEL ANALYTICS DAX MEASURES ─────────────────────────────
+
+Category View Share % = 
+    AVERAGE(category_analytics[view_share_pct])
+
+Top Performing Category = 
+    CALCULATE(
+        FIRSTNONEMPTY(category_analytics[category_name], 1),
+        TOPN(1, ALL(category_analytics[category_name]), [Total Trending Views], DESC)
+    )
+
+Top Channel Rank 1 in Region = 
+    CALCULATE(
+        MAX(channel_analytics[channel_title]),
+        channel_analytics[rank_in_region] = 1
+    )
+
+Channel Views Per Video = 
+    DIVIDE([Total Trending Views], SUM(channel_analytics[total_videos]), 0)
+
+Engagement Intensity Index = 
+    ([Average Engagement Rate] * 100) * ([Average Like Ratio] * 100)
+
+
+// ── 3. TIME INTELLIGENCE & COMPARATIVE DAX MEASURES ──────────────────────────
+
+Views Previous Trending Day = 
+    CALCULATE(
+        [Total Trending Views],
+        DATEADD(trending_analytics[trending_date_parsed], -1, DAY)
+    )
+
+Views Day-over-Day Growth % = 
+    VAR PrevViews = [Views Previous Trending Day]
+    VAR CurrViews = [Total Trending Views]
+    RETURN
+        IF(
+            ISBLANK(PrevViews) || PrevViews = 0,
+            BLANK(),
+            DIVIDE(CurrViews - PrevViews, PrevViews, 0)
+        )
+
+Region Engagement Ranking = 
+    RANKX(
+        ALL(trending_analytics[region]),
+        [Average Engagement Rate],
+        ,
+        DESC,
+        Dense
+    )
