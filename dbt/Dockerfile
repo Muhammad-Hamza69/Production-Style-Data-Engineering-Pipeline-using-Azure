@@ -4,6 +4,7 @@
 # drift and matches packages.microsoft.com's debian/12 driver package.
 FROM python:3.12-slim-bookworm
 
+
 # dbt-synapse connects via pyodbc -> Microsoft ODBC Driver 18 for SQL
 # Server, which isn't a pip package -- it's an OS-level driver Microsoft
 # only ships via apt. gettext-base provides envsubst for profiles.yml
