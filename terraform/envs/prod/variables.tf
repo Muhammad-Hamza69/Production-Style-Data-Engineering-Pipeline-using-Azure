@@ -6,9 +6,9 @@ variable "resource_group_name" {
 }
 
 variable "location" {
-  description = "Azure region. centralus, not eastus -- new subscriptions can hit SqlServerRegionDoesNotAllowProvisioning in eastus, which blocks the Synapse workspace (it provisions a logical SQL server under the hood). Confirmed working in centralus."
+  description = "Azure region. southcentralus used to avoid regional capacity locks in centralus/eastus for Azure Container Apps."
   type        = string
-  default     = "centralus"
+  default     = "southcentralus"
 }
 
 variable "project_name" {
