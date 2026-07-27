@@ -46,9 +46,10 @@ resource "azurerm_container_app_job" "ingest" {
   template {
     container {
       name   = "ingest"
-      image  = "${var.acr_login_server}/yt-ingest:${var.ingest_image_tag}"
+      image  = var.ingest_image_tag != "latest" ? "${var.acr_login_server}/yt-ingest:${var.ingest_image_tag}" : "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 0.5
       memory = "1Gi"
+
 
       env {
         name  = "STORAGE_ACCOUNT_NAME"
@@ -97,9 +98,10 @@ resource "azurerm_container_app_job" "raw_transform" {
   template {
     container {
       name   = "raw-transform"
-      image  = "${var.acr_login_server}/yt-raw-transform:${var.raw_transform_image_tag}"
+      image  = var.raw_transform_image_tag != "latest" ? "${var.acr_login_server}/yt-raw-transform:${var.raw_transform_image_tag}" : "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 1.0
       memory = "2Gi"
+
 
       env {
         name  = "STORAGE_ACCOUNT_NAME"
@@ -155,9 +157,10 @@ resource "azurerm_container_app_job" "dbt" {
   template {
     container {
       name   = "dbt"
-      image  = "${var.acr_login_server}/yt-dbt:${var.dbt_image_tag}"
+      image  = var.dbt_image_tag != "latest" ? "${var.acr_login_server}/yt-dbt:${var.dbt_image_tag}" : "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 1.0
       memory = "2Gi"
+
 
       env {
         name  = "SYNAPSE_SERVER"
@@ -218,9 +221,10 @@ resource "azurerm_container_app" "dashboard" {
 
     container {
       name   = "dashboard"
-      image  = "${var.acr_login_server}/yt-dashboard:${var.dashboard_image_tag}"
+      image  = var.dashboard_image_tag != "latest" ? "${var.acr_login_server}/yt-dashboard:${var.dashboard_image_tag}" : "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 0.5
       memory = "1Gi"
+
 
       env {
         name  = "SYNAPSE_SERVER"

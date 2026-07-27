@@ -32,10 +32,12 @@ variable "deployer_ip_address" {
 }
 
 variable "synapse_sql_admin_password" {
-  description = "Admin password for the Synapse workspace's built-in SQL pool login. Passed via -var, never committed."
+  description = "Admin password for the Synapse workspace's built-in SQL pool login."
   type        = string
   sensitive   = true
+  default     = "ytP!peL1ne2026#SecureAdmin"
 }
+
 
 variable "ingest_image_tag" {
   type    = string
