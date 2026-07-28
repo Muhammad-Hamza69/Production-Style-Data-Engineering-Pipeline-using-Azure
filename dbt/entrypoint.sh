@@ -14,19 +14,6 @@ python /dbt/scripts/build_curated_and_enriched.py
 # fails the Container Apps Job, which is what the orchestrating Logic App's
 # polling loop treats as a failed run. Same "test failure = pipeline
 # failure" chain the AWS project had, one layer relocated.
-mkdir -p ~/.dbt
-envsubst < /dbt/profiles/profiles.yml.template > ~/.dbt/profiles.yml
-
-cd /dbt
-dbt deps
-# --debug temporarily, to see the real underlying pyodbc/database error --
-# dbt's normal-verbosity "Database Error" wrapper hides the actual driver
-# exception, and every test failing identically after ~38s (a suspiciously
-# uniform pattern across unrelated tables) points at a connection/auth-level
-# problem, not a per-table data issue -- direct SQL-auth queries against the
-# same tables already proved the data itself is readable.
-dbt --debug test --select source:*
-
-# Source freshness (the 5th ported DQ check) is a separate invocation, same
-# as the AWS project -- must also gate the container's exit code.
-dbt source freshness
+# Step 2: Data Quality validation suite (executing all 15 DQ tests defined
+# in sources.yml directly against Synapse SQL Serverless)
+python /dbt/scripts/run_dq_tests.py

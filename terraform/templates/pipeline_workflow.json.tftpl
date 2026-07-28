@@ -46,7 +46,7 @@
       "Check_Ingest_Result": {
         "type": "If",
         "runAfter": { "Poll_Ingest_Job": ["Succeeded"] },
-        "expression": { "equals": ["@body('Get_Ingest_Status')?['properties']?['status']", "Succeeded"] },
+        "expression": "@equals(body('Get_Ingest_Status')?['properties']?['status'], 'Succeeded')",
         "actions": {
           "Start_RawTransform_Job": {
             "type": "Http",
@@ -82,7 +82,7 @@
           "Check_RawTransform_Result": {
             "type": "If",
             "runAfter": { "Poll_RawTransform_Job": ["Succeeded"] },
-            "expression": { "equals": ["@body('Get_RawTransform_Status')?['properties']?['status']", "Succeeded"] },
+            "expression": "@equals(body('Get_RawTransform_Status')?['properties']?['status'], 'Succeeded')",
             "actions": {
               "Start_Dbt_Job": {
                 "type": "Http",
@@ -118,34 +118,28 @@
               "Check_Dbt_Result": {
                 "type": "If",
                 "runAfter": { "Poll_Dbt_Job": ["Succeeded"] },
-                "expression": { "equals": ["@body('Get_Dbt_Status')?['properties']?['status']", "Succeeded"] },
+                "expression": "@equals(body('Get_Dbt_Status')?['properties']?['status'], 'Succeeded')",
                 "actions": {
                   "Notify_Success": {
-                    "type": "Http",
+                    "type": "Compose",
                     "runAfter": {},
                     "inputs": {
-                      "method": "POST",
-                      "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
-                      "body": {
-                        "to": "${alert_email}",
-                        "subject": "[YT Pipeline] SUCCESS - Pipeline Run Completed",
-                        "body": "The YouTube Data Pipeline executed successfully across Staging, Raw, Curated, and Enriched layers."
-                      }
+                      "to": "${alert_email}",
+                      "subject": "[YT Pipeline] SUCCESS - Pipeline Run Completed",
+                      "body": "The YouTube Data Pipeline executed successfully across Staging, Raw, Curated, and Enriched layers."
                     }
                   }
                 },
                 "else": {
                   "actions": {
                     "Notify_Dbt_Failure": {
-                      "type": "Http",
+                      "type": "Terminate",
                       "runAfter": {},
                       "inputs": {
-                        "method": "POST",
-                        "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
-                        "body": {
-                          "to": "${alert_email}",
-                          "subject": "[YT Pipeline] FAILURE -- dbt build failed",
-                          "body": "@{string(body('Get_Dbt_Status'))}"
+                        "runStatus": "Failed",
+                        "runError": {
+                          "code": "DbtJobFailed",
+                          "message": "@{string(body('Get_Dbt_Status'))}"
                         }
                       }
                     }
@@ -156,15 +150,13 @@
             "else": {
               "actions": {
                 "Notify_RawTransform_Failure": {
-                  "type": "Http",
+                  "type": "Terminate",
                   "runAfter": {},
                   "inputs": {
-                    "method": "POST",
-                    "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
-                    "body": {
-                      "to": "${alert_email}",
-                      "subject": "[YT Pipeline] FAILURE -- raw-transform failed",
-                      "body": "@{string(body('Get_RawTransform_Status'))}"
+                    "runStatus": "Failed",
+                    "runError": {
+                      "code": "RawTransformJobFailed",
+                      "message": "@{string(body('Get_RawTransform_Status'))}"
                     }
                   }
                 }
@@ -175,15 +167,13 @@
         "else": {
           "actions": {
             "Notify_Ingest_Failure": {
-              "type": "Http",
+              "type": "Terminate",
               "runAfter": {},
               "inputs": {
-                "method": "POST",
-                "uri": "https://prod-08.centralus.logic.azure.com:443/workflows/06845ee7e8e6497daf5eb44d28ce79d5/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=3qi59Uh5kUaALo1QxlwV6Y-qs3mzVQY0-gAaT4xJ7Y4",
-                "body": {
-                  "to": "${alert_email}",
-                  "subject": "[YT Pipeline] FAILURE -- ingest failed",
-                  "body": "@{string(body('Get_Ingest_Status'))}"
+                "runStatus": "Failed",
+                "runError": {
+                  "code": "IngestJobFailed",
+                  "message": "@{string(body('Get_Ingest_Status'))}"
                 }
               }
             }
