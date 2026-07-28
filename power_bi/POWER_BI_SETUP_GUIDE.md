@@ -2,6 +2,7 @@
 
 This document details how to connect **Power BI Desktop & Power BI Service** to your **Azure Synapse Serverless SQL Pool** to build interactive KPI dashboards over the `enriched` Delta Parquet analytics layer.
 
+
 ---
 
 ## 🏗️ Architecture & Data Sources

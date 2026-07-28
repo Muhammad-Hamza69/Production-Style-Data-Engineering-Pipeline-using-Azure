@@ -4,7 +4,7 @@
 // Server: ytpl-synapse-387f2fde-ondemand.sql.azuresynapse.net
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Table 1: enriched.trending_analytics
+// Table 1: enriched.trending_analytics 
 let
     Source = Sql.Database("ytpl-synapse-387f2fde-ondemand.sql.azuresynapse.net", "yt_pipeline"),
     enriched_trending = Source{[Schema="enriched", Item="trending_analytics"]}[Data]
