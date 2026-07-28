@@ -176,7 +176,7 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/yt-dashboard:${{ github.sha }}
 
   deploy-and-initialize:
-    name: '3. Update Azure Services & Trigger Pipeline Execution'
+    name: '3. Update Azure Services & Trigger Pipeline Orchestration'
     needs: [changes, build-and-push-containers]
     if: always() && (needs.changes.outputs.all == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
@@ -189,43 +189,48 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Update & Trigger Ingest Job
+      - name: Extract Subscription ID
+        run: |
+          SUB_ID=$(az account show --query id -o tsv)
+          echo "AZURE_SUB_ID=$SUB_ID" >> $GITHUB_ENV
+
+      - name: Update Ingest Job Container Image
         if: needs.changes.outputs.ingest == 'true' || github.event_name == 'workflow_dispatch'
         run: |
-          echo "Updating Container Apps Job: yt-pipeline-ingest with tag ${{ github.sha }}..."
+          echo "Updating Container Apps Job: yt-pipeline-ingest with image tag ${{ github.sha }}..."
           az containerapp job update \
             --name yt-pipeline-ingest \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/yt-ingest:${{ github.sha }} || true
 
-          echo "Triggering Job: yt-pipeline-ingest..."
-          az containerapp job start \
-            --name yt-pipeline-ingest \
-            --resource-group ${{ env.RESOURCE_GROUP }}
-
-      - name: Update Raw Transform Job
+      - name: Update Raw Transform Job Container Image
         if: needs.changes.outputs.raw_transform == 'true' || github.event_name == 'workflow_dispatch'
         run: |
-          echo "Updating Container Apps Job: yt-pipeline-raw-transform with tag ${{ github.sha }}..."
+          echo "Updating Container Apps Job: yt-pipeline-raw-transform with image tag ${{ github.sha }}..."
           az containerapp job update \
             --name yt-pipeline-raw-transform \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/yt-raw-transform:${{ github.sha }} || true
 
-      - name: Update DBT Job
+      - name: Update DBT Job Container Image
         if: needs.changes.outputs.dbt == 'true' || github.event_name == 'workflow_dispatch'
         run: |
-          echo "Updating Container Apps Job: yt-pipeline-dbt with tag ${{ github.sha }}..."
+          echo "Updating Container Apps Job: yt-pipeline-dbt with image tag ${{ github.sha }}..."
           az containerapp job update \
             --name yt-pipeline-dbt \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/yt-dbt:${{ github.sha }} || true
 
-      - name: Update Dashboard Container App
+      - name: Update Dashboard Container App Image
         if: needs.changes.outputs.dashboard == 'true' || github.event_name == 'workflow_dispatch'
         run: |
-          echo "Updating Container App: yt-pipeline-dashboard with tag ${{ github.sha }}..."
+          echo "Updating Container App: yt-pipeline-dashboard with image tag ${{ github.sha }}..."
           az containerapp update \
             --name yt-pipeline-dashboard \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --image ${{ env.ACR_LOGIN_SERVER }}/yt-dashboard:${{ github.sha }} || true
+
+      - name: Trigger Logic App Orchestration Pipeline
+        run: |
+          echo "Triggering Logic App end-to-end orchestration pipeline (yt-pipeline-orchestration)..."
+          az rest --method post --uri "https://management.azure.com/subscriptions/${AZURE_SUB_ID}/resourceGroups/${{ env.RESOURCE_GROUP }}/providers/Microsoft.Logic/workflows/yt-pipeline-orchestration/triggers/Hourly/run?api-version=2019-05-01"
