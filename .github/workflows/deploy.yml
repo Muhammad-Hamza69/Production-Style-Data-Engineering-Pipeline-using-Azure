@@ -24,17 +24,19 @@ permissions:
 env:
   TF_WORKING_DIR: 'terraform/envs/prod'
   PYTHON_VERSION: '3.12'
+  RESOURCE_GROUP: 'HAMZA-RESOURCE-GROUP'
+  ACR_LOGIN_SERVER: 'ytpipeline387f2fdeacr.azurecr.io'
 
 jobs:
   changes:
-    name: '0. Detect Changed Path Areas'
+    name: '0. Detect Changed Application Areas'
     runs-on: ubuntu-latest
     outputs:
-      terraform: ${{ steps.filter.outputs.terraform }}
       ingest: ${{ steps.filter.outputs.ingest }}
       raw_transform: ${{ steps.filter.outputs.raw_transform }}
       dbt: ${{ steps.filter.outputs.dbt }}
       dashboard: ${{ steps.filter.outputs.dashboard }}
+      all: ${{ steps.filter.outputs.all }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -44,33 +46,25 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            terraform:
-              - 'terraform/**'
-              - '.github/workflows/deploy.yml'
             ingest:
               - 'jobs/ingest/**'
-              - '.github/workflows/deploy.yml'
             raw_transform:
               - 'jobs/raw_transform/**'
-              - '.github/workflows/deploy.yml'
             dbt:
               - 'dbt/**'
-              - '.github/workflows/deploy.yml'
             dashboard:
               - 'dashboard/**'
-              - '.github/workflows/deploy.yml'
+            all:
+              - 'jobs/**'
+              - 'dbt/**'
+              - 'dashboard/**'
+              - 'scripts/**'
+              - '.github/workflows/**'
 
   terraform:
-    name: '1. Provision Azure Infrastructure (Terraform)'
-    needs: changes
-    if: needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+    name: '1. Provision Azure Infrastructure (Terraform - On Demand Only)'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    outputs:
-      acr_login_server: ${{ steps.tf_outputs.outputs.acr_login_server }}
-      resource_group: ${{ steps.tf_outputs.outputs.resource_group }}
-      synapse_endpoint: ${{ steps.tf_outputs.outputs.synapse_endpoint }}
-      key_vault_name: ${{ steps.tf_outputs.outputs.key_vault_name }}
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -92,64 +86,34 @@ jobs:
         with:
           terraform_version: '1.9.0'
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
       - name: Ensure Azure Backend State Storage Exists
         run: |
-          az group create --name "HAMZA-RESOURCE-GROUP" --location "southcentralus"
-          az storage account create --name "hamzatfstate72143" --resource-group "HAMZA-RESOURCE-GROUP" --location "southcentralus" --sku Standard_LRS --allow-blob-public-access false || true
+          az group create --name "${{ env.RESOURCE_GROUP }}" --location "southcentralus"
+          az storage account create --name "hamzatfstate72143" --resource-group "${{ env.RESOURCE_GROUP }}" --location "southcentralus" --sku Standard_LRS --allow-blob-public-access false || true
           az storage container create --name "tfstate" --account-name "hamzatfstate72143" --auth-mode login || true
-          
-          # Break any lingering state locks if needed
           az storage blob lease break --account-name "hamzatfstate72143" --container-name "tfstate" --blob-name "prod.terraform.tfstate" --auth-mode login 2>/dev/null || true
 
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ env.TF_WORKING_DIR }}
 
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
       - name: Get Runner Public IP
         id: runner_ip
         run: echo "ip=$(curl -s https://api.ipify.org)" >> $GITHUB_OUTPUT
 
-      - name: Terraform Plan
-        id: plan
+      - name: Terraform Plan / Apply
         run: |
-          terraform plan \
-            -var="youtube_api_key=${{ secrets.YOUTUBE_API_KEY }}" \
-            -var="alert_email=${{ secrets.ALERT_EMAIL }}" \
-            -var="deployer_ip_address=${{ steps.runner_ip.outputs.ip }}" \
-            -out=tfplan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
-      - name: Terraform Apply
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
-        run: terraform apply -auto-approve tfplan
-        working-directory: ${{ env.TF_WORKING_DIR }}
-
-      - name: Extract Terraform Outputs
-        id: tf_outputs
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'apply')
-        run: |
-          ACR_SERVER=$(terraform output -raw acr_login_server 2>/dev/null || echo "ytpipeline387f2fdeacr.azurecr.io")
-          RG_NAME=$(terraform output -raw resource_group_name 2>/dev/null || echo "HAMZA-RESOURCE-GROUP")
-          SYNAPSE_EP=$(terraform output -raw synapse_sql_endpoint 2>/dev/null || echo "")
-          KV_NAME=$(terraform output -raw key_vault_name 2>/dev/null || echo "ytpl-kv-387f2fde")
-          echo "acr_login_server=$ACR_SERVER" >> $GITHUB_OUTPUT
-          echo "resource_group=$RG_NAME" >> $GITHUB_OUTPUT
-          echo "synapse_endpoint=$SYNAPSE_EP" >> $GITHUB_OUTPUT
-          echo "key_vault_name=$KV_NAME" >> $GITHUB_OUTPUT
+          if [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+            terraform destroy -auto-approve -var="youtube_api_key=${{ secrets.YOUTUBE_API_KEY }}" -var="alert_email=${{ secrets.ALERT_EMAIL }}"
+          else
+            terraform apply -auto-approve -var="youtube_api_key=${{ secrets.YOUTUBE_API_KEY }}" -var="alert_email=${{ secrets.ALERT_EMAIL }}" -var="deployer_ip_address=${{ steps.runner_ip.outputs.ip }}"
+          fi
         working-directory: ${{ env.TF_WORKING_DIR }}
 
   build-and-push-containers:
     name: '2. Build & Push Microservice Docker Images'
-    needs: [changes, terraform]
-    if: always() && (needs.changes.outputs.ingest == 'true' || needs.changes.outputs.raw_transform == 'true' || needs.changes.outputs.dbt == 'true' || needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch')
+    needs: changes
+    if: always() && (needs.changes.outputs.all == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -160,23 +124,15 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set Fallback ACR Server
-        run: |
-          ACR_SERVER="${{ needs.terraform.outputs.acr_login_server }}"
-          if [ -z "$ACR_SERVER" ]; then
-            ACR_SERVER="ytpipeline387f2fdeacr.azurecr.io"
-          fi
-          echo "ACR_LOGIN_SERVER=$ACR_SERVER" >> $GITHUB_ENV
-
       - name: Log in to Azure Container Registry
         run: |
-          az acr login --name $ACR_LOGIN_SERVER
+          az acr login --name ${{ env.ACR_LOGIN_SERVER }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build & Push Ingest Container
-        if: needs.changes.outputs.ingest == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.changes.outputs.ingest == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./jobs/ingest
@@ -187,7 +143,7 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/yt-ingest:${{ github.sha }}
 
       - name: Build & Push Raw Transform Container
-        if: needs.changes.outputs.raw_transform == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.changes.outputs.raw_transform == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./jobs/raw_transform
@@ -198,7 +154,7 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/yt-raw-transform:${{ github.sha }}
 
       - name: Build & Push dbt Container
-        if: needs.changes.outputs.dbt == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.changes.outputs.dbt == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./dbt
@@ -209,7 +165,7 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/yt-dbt:${{ github.sha }}
 
       - name: Build & Push Dashboard Container
-        if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+        if: needs.changes.outputs.dashboard == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v5
         with:
           context: ./dashboard
@@ -220,9 +176,9 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/yt-dashboard:${{ github.sha }}
 
   deploy-and-initialize:
-    name: '3. Synapse Database Setup & Container Refresh'
-    needs: [changes, terraform, build-and-push-containers]
-    if: always() && (needs.changes.outputs.ingest == 'true' || needs.changes.outputs.raw_transform == 'true' || needs.changes.outputs.dbt == 'true' || needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch')
+    name: '3. Update Azure Services & Trigger Pipeline Execution'
+    needs: [changes, build-and-push-containers]
+    if: always() && (needs.changes.outputs.all == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -233,51 +189,43 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set Resource Group & ACR Variables
+      - name: Update & Trigger Ingest Job
+        if: needs.changes.outputs.ingest == 'true' || github.event_name == 'workflow_dispatch'
         run: |
-          RG_NAME="${{ needs.terraform.outputs.resource_group }}"
-          if [ -z "$RG_NAME" ]; then
-            RG_NAME="HAMZA-RESOURCE-GROUP"
-          fi
-          ACR_SERVER="${{ needs.terraform.outputs.acr_login_server }}"
-          if [ -z "$ACR_SERVER" ]; then
-            ACR_SERVER="ytpipeline387f2fdeacr.azurecr.io"
-          fi
-          echo "RESOURCE_GROUP=$RG_NAME" >> $GITHUB_ENV
-          echo "ACR_LOGIN_SERVER=$ACR_SERVER" >> $GITHUB_ENV
-
-      - name: Refresh Ingest Job
-        if: needs.changes.outputs.ingest == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
+          echo "Updating Container Apps Job: yt-pipeline-ingest with tag ${{ github.sha }}..."
           az containerapp job update \
             --name yt-pipeline-ingest \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_LOGIN_SERVER/yt-ingest:${{ github.sha }} || true
-          
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/yt-ingest:${{ github.sha }} || true
+
+          echo "Triggering Job: yt-pipeline-ingest..."
           az containerapp job start \
             --name yt-pipeline-ingest \
-            --resource-group $RESOURCE_GROUP
+            --resource-group ${{ env.RESOURCE_GROUP }}
 
-      - name: Refresh Raw Transform Job
-        if: needs.changes.outputs.raw_transform == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Update Raw Transform Job
+        if: needs.changes.outputs.raw_transform == 'true' || github.event_name == 'workflow_dispatch'
         run: |
+          echo "Updating Container Apps Job: yt-pipeline-raw-transform with tag ${{ github.sha }}..."
           az containerapp job update \
             --name yt-pipeline-raw-transform \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_LOGIN_SERVER/yt-raw-transform:${{ github.sha }} || true
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/yt-raw-transform:${{ github.sha }} || true
 
-      - name: Refresh DBT Job
-        if: needs.changes.outputs.dbt == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Update DBT Job
+        if: needs.changes.outputs.dbt == 'true' || github.event_name == 'workflow_dispatch'
         run: |
+          echo "Updating Container Apps Job: yt-pipeline-dbt with tag ${{ github.sha }}..."
           az containerapp job update \
             --name yt-pipeline-dbt \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_LOGIN_SERVER/yt-dbt:${{ github.sha }} || true
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/yt-dbt:${{ github.sha }} || true
 
-      - name: Refresh Dashboard Container App
-        if: needs.changes.outputs.dashboard == 'true' || needs.changes.outputs.terraform == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Update Dashboard Container App
+        if: needs.changes.outputs.dashboard == 'true' || github.event_name == 'workflow_dispatch'
         run: |
+          echo "Updating Container App: yt-pipeline-dashboard with tag ${{ github.sha }}..."
           az containerapp update \
             --name yt-pipeline-dashboard \
-            --resource-group $RESOURCE_GROUP \
-            --image $ACR_LOGIN_SERVER/yt-dashboard:${{ github.sha }} || true
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --image ${{ env.ACR_LOGIN_SERVER }}/yt-dashboard:${{ github.sha }} || true
